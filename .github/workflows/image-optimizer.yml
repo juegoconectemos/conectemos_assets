@@ -1,0 +1,56 @@
+name: Image variants generator
+
+on:
+  push:
+    paths:
+      - 'images/**'
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install sharp
+        run: |
+          npm init -y
+          npm install sharp@0.31.5
+
+      - name: Generate responsive images
+        run: |
+          node -e "
+          const fs = require('fs'), path = require('path'), sharp = require('sharp');
+          const srcDir = 'images';
+          const outDir = 'images/variants';
+          const sizes = [400,800,1600];
+          if (!fs.existsSync(outDir)) fs.mkdirSync(outDir,{ recursive: true });
+          const files = fs.readdirSync(srcDir).filter(f=>f.match(/\\.(jpe?g|png)$/i));
+          (async ()=> {
+            for (const f of files) {
+              const p = path.join(srcDir,f);
+              const name = path.parse(f).name;
+              for (const w of sizes) {
+                const outJ = path.join(outDir,`${name}-${w}.jpg`);
+                const outW = path.join(outDir,`${name}-${w}.webp`);
+                try {
+                  await sharp(p).resize({ width: w }).jpeg({ quality:75 }).toFile(outJ);
+                  await sharp(p).resize({ width: w }).webp({ quality:75 }).toFile(outW);
+                } catch (e) { console.error('Error processing', p, e); }
+              }
+            }
+          })();
+          "
+
+      - name: Commit generated variants
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "chore: generar variantes de imagen (Action)"
+          file_pattern: "images/variants/**"
